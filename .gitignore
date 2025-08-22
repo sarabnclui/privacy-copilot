@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.venv/
+.env
+.env.*
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Streamlit
+.streamlit/
+
+# Data artifacts (derived)
+data/public/chroma_db/
+data/public/index/
+data/public/chunks.jsonl
+
+# Large raw docs (keep the small HTML sample tracked)
+data/public/raw/*.pdf
+data/public/raw/*.docx
+data/public/raw/*.zip
