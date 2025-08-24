@@ -1,0 +1,3 @@
+question,expected_source,notes
+"What are lawful bases for processing?","gdpr_sample.html","Should match the lawful bases chunk"
+"How long should data be kept?","gdpr_sample.html","Should match the retention chunk"
