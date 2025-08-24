@@ -1,0 +1,8 @@
+python-dotenv
+openai
+sentence-transformers
+chromadb
+hnswlib
+beautifulsoup4
+lxml
+pypdf
