@@ -1,0 +1,28 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: ${{ github.workspace }}/src
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Build chunks & index (demo data)
+        run: |
+          python -m privacy_copilot.rag.ingest.chunker
+          python -m privacy_copilot.rag.index.build_index_chroma
+      - name: Run tiny eval
+        if: ${{ secrets.OPENAI_API_KEY != '' }}
+        run: python eval/run_eval.py
