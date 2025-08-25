@@ -6,3 +6,14 @@ hnswlib
 beautifulsoup4
 lxml
 pypdf
+streamlit
+python-dotenv
+openai
+sentence-transformers
+chromadb
+hnswlib
+beautifulsoup4
+lxml
+pypdf
+jinja2
+pyyaml
