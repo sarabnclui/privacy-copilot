@@ -25,6 +25,64 @@ def _load_chunks(path: str = "data/public/chunks.jsonl"):
             metas.append({k: obj[k] for k in obj if k != "text"})
     return texts, metas, ids
 
+
+
+
+    import os
+import logging
+import traceback
+from typing import List, Optional
+
+# --- Debug toggles (set via env or st.secrets)
+DEBUG_RETRIEVER = os.getenv("DEBUG_RETRIEVER", "0") in ("1", "true", "True", "yes")
+DEBUG_PDB       = os.getenv("DEBUG_PDB", "0")       in ("1", "true", "True", "yes")
+DEBUG_DEBUGPY   = os.getenv("DEBUG_DEBUGPY", "0")   in ("1", "true", "True", "yes")
+DEBUGPY_PORT    = int(os.getenv("DEBUGPY_PORT", "5678"))
+
+DB_DIR      = os.getenv("CHROMA_DB_DIR", "./.chroma")
+COLLECTION  = os.getenv("CHROMA_COLLECTION", "my_collection")
+MODEL_NAME  = os.getenv("EMBED_MODEL", "intfloat/e5-base-v2")
+
+# --- Optional Streamlit-friendly logging
+try:
+    import streamlit as st
+    _IN_ST = True
+except Exception:
+    st = None
+    _IN_ST = False
+
+logging.basicConfig(level=logging.DEBUG if DEBUG_RETRIEVER else logging.INFO)
+log = logging.getLogger("retriever")
+
+def _maybe_break(label: str):
+    """Conditional breakpoint with a label so you know where you are."""
+    if DEBUG_RETRIEVER:
+        log.debug(f"[BRK] {label}")
+        if DEBUG_PDB:
+            import pdb; pdb.set_trace()
+        elif DEBUG_DEBUGPY:
+            # Start debugpy listener once; subsequent calls just hit a break
+            import debugpy
+            if not debugpy.is_client_connected():
+                try:
+                    debugpy.listen(("0.0.0.0", DEBUGPY_PORT))
+                    log.info(f"debugpy listening on 0.0.0.0:{DEBUGPY_PORT} (attach from VS Code)")
+                except Exception as e:
+                    log.exception(f"debugpy.listen failed: {e}")
+            try:
+                debugpy.breakpoint()
+            except Exception:
+                log.exception("debugpy.breakpoint failed")
+
+def _show_exception(title: str, err: BaseException):
+    tb = "".join(traceback.format_exception(type(err), err, err.__traceback__))
+    log.error(f"{title}: {err}\n{tb}")
+    if _IN_ST:
+        with st.expander(f"⚠️ {title}", expanded=False):
+            st.code(tb, language="text")
+
+# ------------------------------------------------------------------
+
 class Retriever:
     """
     Hybrid retriever:
@@ -38,36 +96,73 @@ class Retriever:
         self._chroma = None
         self._collection = None
 
+        log.info("Initializing Retriever...")
+        if _IN_ST:
+            st.caption(f"Retriever init: DB_DIR='{DB_DIR}', COLLECTION='{COLLECTION}', MODEL='{MODEL_NAME}'")
+
+        # ---- BREAKPOINT #1: entering __init__
+        _maybe_break("enter __init__")
+
         # Try Chroma first
         try:
             # Optional SQLite shim (some clouds lack JSON/FTS in sqlite3)
             try:
+                _maybe_break("before pysqlite3 shim")
                 import pysqlite3  # type: ignore
                 import sys
                 sys.modules["sqlite3"] = pysqlite3
-            except Exception:
-                pass
+                log.debug("pysqlite3 shim applied")
+            except Exception as shim_err:
+                log.debug(f"pysqlite3 shim not used: {shim_err}")
+
+            # ---- BREAKPOINT #2: before importing chromadb
+            _maybe_break("before chromadb import")
 
             import chromadb
             from chromadb.utils import embedding_functions
+            from sentence_transformers import SentenceTransformer  # ensure import error shows here
+
+            log.debug("chromadb and sentence_transformers imported")
 
             class E5QueryEF(embedding_functions.EmbeddingFunction):
                 def __init__(self, model_name: str):
+                    # ---- BREAKPOINT #3: before loading model
+                    _maybe_break("before SentenceTransformer(model)")
                     self.model = SentenceTransformer(model_name)
+                    log.debug(f"SentenceTransformer loaded: {model_name}")
                 def __call__(self, inputs: List[str]):
                     texts = [f"query: {t}" for t in inputs]
                     return self.model.encode(texts, normalize_embeddings=True).tolist()
 
+            # ---- BREAKPOINT #4: before PersistentClient
+            _maybe_break("before chromadb.PersistentClient")
             self._chroma = chromadb.PersistentClient(path=DB_DIR)
+
+            # ---- BREAKPOINT #5: before get_collection
+            _maybe_break("before get_collection")
             self._collection = self._chroma.get_collection(
                 name=COLLECTION, embedding_function=E5QueryEF(MODEL_NAME)
             )
+
             # Probe query to confirm it works
+            # ---- BREAKPOINT #6: before probe query
+            _maybe_break("before probe query")
             _ = self._collection.query(query_texts=["ping"], n_results=1)
+            log.info("Chroma probe succeeded")
+
             self._mode = "chroma"
-        except Exception:
-            # Fall back to in-memory retriever
+            # ---- BREAKPOINT #7: after successful chroma setup
+            _maybe_break("after chroma setup")
+
+        except Exception as e:
+            _show_exception("Chroma init failed; falling back", e)
+            # ---- BREAKPOINT #8: in exception before fallback
+            _maybe_break("in except before fallback")
             self._setup_fallback()
+
+
+
+
 
     # ---------- Fallback (in-memory) ----------
     def _setup_fallback(self):
